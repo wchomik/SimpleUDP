@@ -17,4 +17,4 @@ server:server.cpp ../SimpleUDP.h
 .PHONY: clean
 
 clean:
-	rm client server
+	rm -f client server

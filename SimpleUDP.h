@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <unistd.h>
 #include <system_error>
+#include <stdexcept>
 #include <vector>
 #include <stack>
 #include <functional>
@@ -208,12 +209,6 @@ private:
         }
     }
 
-    template<typename... Args>
-    void send(Args... args)
-    {
-        out_messages.push(message(args...));
-    }
-
     unsigned char process_input_message(int buffer_len, char * buffer)
     {
         if(buffer_len >= 1) {
@@ -317,7 +312,7 @@ public:
         is_err_set = true;
     }
 
-    void start()
+    void listen()
     {
         ILOG("Setting new sockets on port: " << port);
 
@@ -330,7 +325,7 @@ public:
         memset (&client_address, 0, sizeof (client_address));
         client_address.sin_family = PF_INET;
         server_address.sin_family = PF_INET;
-        server_address.sin_port = htons (port);
+        server_address.sin_port   = htons (port);
         server_address.sin_addr.s_addr = htonl (INADDR_ANY);
 
         if (bind (server_sockfd, (struct sockaddr *) &server_address, sizeof (struct sockaddr_in))) {
@@ -342,6 +337,55 @@ public:
         int noise;
         int qual;
         check_wifi_quality(true, level, noise, qual);
+    }
+
+    void connect(std::string address, int port)
+    {
+        ILOG("Setting new sockets on port: " << port);
+
+        size = sizeof (struct sockaddr);
+
+        server_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+        client_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+
+        memset (&server_address, 0, sizeof (server_address));
+        memset (&client_address, 0, sizeof (client_address));
+        client_address.sin_family = PF_INET;
+        client_address.sin_port   = htons (port);
+        client_address.sin_addr.s_addr = inet_addr(address.c_str());
+        server_address.sin_family = PF_INET;
+
+        ILOG("Connecting to server");
+        int out_buffer_len = message((unsigned char)MSG_IN_HELLO, instance_name.c_str()).get(buffer_size, out_buffer);
+        sendto(server_sockfd, out_buffer, out_buffer_len, 0, (struct sockaddr *) &client_address, sizeof (struct sockaddr));
+
+        ILOG("Waiting for response");
+        recvfrom(server_sockfd, in_buffer, buffer_size, 0, (struct sockaddr *) &server_address, &size);
+
+        ILOG("Server responded");
+        ::connect(server_sockfd, (struct sockaddr *) &server_address, size);
+
+        int level;
+        int noise;
+        int qual;
+        check_wifi_quality(true, level, noise, qual);
+    }
+
+    void set_work(std::function<void(bool)> function) {
+        work = function;
+    }
+
+    void register_message_handler(int message_id, std::function<bool(int, char *)> function) {
+        if(message_id < 100 || message_id > 255) {
+            throw std::range_error("Message beyond 100-255 range");
+        }
+        message_handlers[message_id] = function;
+    }
+
+    template<typename... Args>
+    void send(const char message_id, Args... args)
+    {
+        out_messages.push(message(message_id, args...));
     }
 
     void run() {
@@ -377,7 +421,7 @@ public:
                 if(last_in_message > time_out) {
                     ILOG("No incoming communication since " << last_in_message / MICROINSECOND << "s. Restarting server");
                     stop();
-                    start();
+                    //start();
                     connected = false;
                 }
             }
@@ -416,7 +460,7 @@ public:
                 ssize_t num_bytes = recvfrom (server_sockfd, in_buffer, buffer_size, wait_flag, (struct sockaddr *) &client_address, &size);
 
                 if (0 < num_bytes && process_input_message(num_bytes, in_buffer)) {
-                    if(connect (client_sockfd, (struct sockaddr *) &client_address, size)) {
+                    if(::connect (client_sockfd, (struct sockaddr *) &client_address, size)) {
                         ERNOLOG("Cannot connect");
                     }
                     ILOG("Connected to "<< inet_ntoa(client_address.sin_addr) << ":" << ntohs (client_address.sin_port));
