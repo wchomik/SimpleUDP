@@ -353,6 +353,7 @@ public:
         ILOG("Server started");
 
         auto loop_duration = frequency ? std::chrono::microseconds(1000000 / frequency) : std::chrono::microseconds(0);
+        int wait_flag = frequency ? MSG_DONTWAIT : 0;
         
         int last_in_message = 0;
 
@@ -364,7 +365,7 @@ public:
                 last_in_message += MICROINSECOND / frequency;
                 int in_message_len = -1;
 
-                while((in_message_len = recv(client_sockfd, in_buffer, buffer_size, MSG_DONTWAIT)) != -1) {      
+                while((in_message_len = recv(client_sockfd, in_buffer, buffer_size, wait_flag)) != -1) {      
                     unsigned char message_id = process_input_message(in_message_len, in_buffer);
                     memset(in_buffer, 0, buffer_size);
                     last_in_message = 0;
@@ -381,7 +382,9 @@ public:
                 }
             }
 
-            work(connected);
+            if(work) {
+                work(connected);
+            }
 
             if(connected){
                 int out_message_len;
@@ -405,10 +408,12 @@ public:
                 }
 
             } else{
-                //ILOG("Waiting for incoming connections.\n");
+                if(!frequency){
+                    ILOG("Waiting for incoming connections.\n");
+                }
                 size = sizeof(client_address);
 
-                ssize_t num_bytes = recvfrom (server_sockfd, in_buffer, buffer_size, MSG_DONTWAIT/**/, (struct sockaddr *) &client_address, &size);
+                ssize_t num_bytes = recvfrom (server_sockfd, in_buffer, buffer_size, wait_flag, (struct sockaddr *) &client_address, &size);
 
                 if (0 < num_bytes && process_input_message(num_bytes, in_buffer)) {
                     if(connect (client_sockfd, (struct sockaddr *) &client_address, size)) {
