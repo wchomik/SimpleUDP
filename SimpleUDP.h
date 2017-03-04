@@ -268,6 +268,7 @@ private:
         ILOG("Succesfully disconnected");
         return true;
     }
+
 public:
     SimpleUDP(int in_port)
     {
@@ -285,6 +286,15 @@ public:
         iwr.u.data.pointer = &iwstats;
         iwr.u.data.length = sizeof(struct iw_statistics);
         iwr.u.data.flags = 1;
+
+        for(int i = 0; i < 256; i++)
+            message_handlers.push_back(std::bind(&SimpleUDP::message_not_implemented, this, std::placeholders::_1, std::placeholders::_2));
+
+        message_handlers[MSG_IN_KEEP_ALIVE] = std::bind(&SimpleUDP::message_keep_alive, this, std::placeholders::_1, std::placeholders::_2);
+        message_handlers[MSG_IN_HELLO]      = std::bind(&SimpleUDP::message_hello, this, std::placeholders::_1, std::placeholders::_2);
+        message_handlers[MSG_IN_ECHO]       = std::bind(&SimpleUDP::message_echo, this, std::placeholders::_1, std::placeholders::_2);
+        message_handlers[MSG_IN_GOODBYE]    = std::bind(&SimpleUDP::message_goodbye, this, std::placeholders::_1, std::placeholders::_2);
+
     }
 
     ~SimpleUDP()
@@ -342,7 +352,7 @@ public:
     {
         ILOG("Server started");
 
-        auto loop_duration = std::chrono::microseconds(std::chrono::microseconds(std::chrono::seconds(1)).count() / frequency);
+        auto loop_duration = frequency ? std::chrono::microseconds(1000000 / frequency) : std::chrono::microseconds(0);
         
         int last_in_message = 0;
 
