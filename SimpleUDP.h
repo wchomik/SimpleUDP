@@ -375,7 +375,7 @@ public:
         work = function;
     }
 
-    void register_message_handler(int message_id, std::function<bool(int, char *)> function) {
+    void register_message_handler(int message_id, const std::function<bool(int, char *)> & function) {
         if(message_id < 100 || message_id > 255) {
             throw std::range_error("Message beyond 100-255 range");
         }

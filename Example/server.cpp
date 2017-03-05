@@ -1,12 +1,12 @@
 #include <iostream>
 #include "../SimpleUDP.h"
 
-bool add(SimpleUDP &server, int buffer_len, char * buffer)
+bool add(SimpleUDP * server, int buffer_len, char * buffer)
 {
     int a;
     int b;
     message::retrive(buffer_len, buffer, a, b);
-    server.send(100, a + b);
+    server->send(100, a + b);
     return true;
 }
 
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     SimpleUDP server(port);
     try {
         server.set_log_stream(std::cout);
-        server.register_message_handler(100, std::bind(add, server, std::placeholders::_1, std::placeholders::_2));
+        server.register_message_handler(100, std::bind(add, &server, std::placeholders::_1, std::placeholders::_2));
 
         server.listen();
         server.run();

@@ -1,11 +1,11 @@
 #include <iostream>
 #include "../SimpleUDP.h"
 
-void work(SimpleUDP &client, bool conected){
+void work(SimpleUDP * client, bool conected){
 	int a;
 	int b;
 	while(std::cin >> a >> b) {
-		client.send(100, a, b);
+		client->send(100, a, b);
 	}
 }
 
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 	}
 
     SimpleUDP client(port);
-	client.set_work(std::bind(work, client, std::placeholders::_1));
+	client.set_work(std::bind(work, &client, std::placeholders::_1));
 	client.register_message_handler(100, print_result);
 	client.connect(argv[1], port);
 }
