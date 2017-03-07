@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
 		std::cout << "Port: " << port << "\n";
 	}
 
-    SimpleUDP server(port);
     try {
+        SimpleUDP server(port);
         server.set_log_stream(std::cout);
         server.register_message_handler(100, std::bind(add, &server, std::placeholders::_1, std::placeholders::_2));
 

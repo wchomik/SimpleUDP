@@ -142,7 +142,7 @@ private:
     bool is_err_set = false;
     std::ostream *err_stream;
 
-    bool halt = true;
+    bool halt = false;
 
     std::string instance_name = "MessageHandler";
     std::stack<message> out_messages;
@@ -356,7 +356,10 @@ public:
         server_address.sin_family = PF_INET;
 
         ILOG("Connecting to server");
-        int out_buffer_len = message((unsigned char)MSG_IN_HELLO, instance_name.c_str()).get(buffer_size, out_buffer);
+        //int out_buffer_len = message((unsigned char)MSG_IN_HELLO, instance_name.c_str()).get(buffer_size, out_buffer);
+        out_buffer[0] = (unsigned char)MSG_IN_HELLO;
+        memcpy(out_buffer + 1, instance_name.c_str(), instance_name.length());
+        int out_buffer_len = instance_name.length() + 1;
         sendto(server_sockfd, out_buffer, out_buffer_len, 0, (struct sockaddr *) &client_address, sizeof (struct sockaddr));
 
         ILOG("Waiting for response");
@@ -399,31 +402,31 @@ public:
         auto loop_duration = frequency ? std::chrono::microseconds(1000000 / frequency) : std::chrono::microseconds(0);
         int wait_flag = frequency ? MSG_DONTWAIT : 0;
         
-        int last_in_message = 0;
+        //int last_in_message = 0;
 
         auto start_time = std::chrono::high_resolution_clock::now();
         auto end_time   = std::chrono::high_resolution_clock::now();
         while (true) {
             start_time = std::chrono::high_resolution_clock::now();
             if(connected) {
-                last_in_message += MICROINSECOND / frequency;
+                //last_in_message += MICROINSECOND / frequency;
                 int in_message_len = -1;
 
                 while((in_message_len = recv(client_sockfd, in_buffer, buffer_size, wait_flag)) != -1) {      
                     unsigned char message_id = process_input_message(in_message_len, in_buffer);
                     memset(in_buffer, 0, buffer_size);
-                    last_in_message = 0;
+                    //last_in_message = 0;
                     if (message_id == MSG_IN_GOODBYE) {
                         connected = false;
                     }
                 }
 
-                if(last_in_message > time_out) {
+                /*if(last_in_message > time_out) {
                     ILOG("No incoming communication since " << last_in_message / MICROINSECOND << "s. Restarting server");
                     stop();
                     //start();
                     connected = false;
-                }
+                }*/
             }
 
             if(work) {
@@ -467,7 +470,7 @@ public:
                     memcpy(in_buffer, "Hello", strlen("Hello") + 1);
                     if (write (client_sockfd, in_buffer, strlen("Hello") + 1) < 0) ERNOLOG ("Cannot write to socket");
                     connected       = true;
-                    last_in_message = 0;
+                    //last_in_message = 0;
                 } else if(num_bytes == -1) {
                     if(errno != EAGAIN && errno != EWOULDBLOCK) ERNOLOG("Cannot accept incoming connections");
                 }
