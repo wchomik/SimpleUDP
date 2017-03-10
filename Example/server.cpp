@@ -6,6 +6,7 @@ bool add(SimpleUDP * server, int buffer_len, char * buffer)
     int a;
     int b;
     message::retrive(buffer_len, buffer, a, b);
+    std::cout << "Add: " << a << " + " << b << "\n";
     server->send(100, a + b);
     return true;
 }

@@ -213,9 +213,9 @@ private:
     {
         if(buffer_len >= 1) {
             unsigned char message_id = buffer[0];
-#ifdef DEBUG
+//#ifdef DEBUG
             ILOG("Message received "<< (int)message_id);
-#endif
+//#endif
             if(connected || (message_id == MSG_IN_HELLO)) {
                 if ((message_handlers[message_id])(buffer_len - 1, buffer + 1)) {
                     return message_id;
@@ -367,6 +367,8 @@ public:
 
         ILOG("Server responded");
         ::connect(server_sockfd, (struct sockaddr *) &server_address, size);
+        
+        connected = true;
 
         int level;
         int noise;
@@ -392,15 +394,20 @@ public:
     }
 
     void run() {
-        run(0);
+        run(0, true);
     }
 
-    void run(int frequency)
+    void run(bool wait)
+    {
+        run(0, wait);
+    }
+
+    void run(int frequency, bool wait)
     {
         ILOG("Server started");
 
         auto loop_duration = frequency ? std::chrono::microseconds(1000000 / frequency) : std::chrono::microseconds(0);
-        int wait_flag = frequency ? MSG_DONTWAIT : 0;
+        int wait_flag = wait ? 0 : MSG_DONTWAIT;
         
         //int last_in_message = 0;
 
@@ -412,6 +419,7 @@ public:
                 //last_in_message += MICROINSECOND / frequency;
                 int in_message_len = -1;
 
+                ILOG("Receiving messages");
                 while((in_message_len = recv(client_sockfd, in_buffer, buffer_size, wait_flag)) != -1) {      
                     unsigned char message_id = process_input_message(in_message_len, in_buffer);
                     memset(in_buffer, 0, buffer_size);
@@ -420,6 +428,7 @@ public:
                         connected = false;
                     }
                 }
+                ILOG("Done");
 
                 /*if(last_in_message > time_out) {
                     ILOG("No incoming communication since " << last_in_message / MICROINSECOND << "s. Restarting server");
@@ -443,13 +452,15 @@ public:
 
                     check_wifi_quality(false, level, noise, qual);
                     out_message_len = message((unsigned char)MSG_OUT_SEND_WIFI_QUALITY, level, noise, qual).get(buffer_size, out_buffer);
-                    send(client_sockfd, out_buffer, out_message_len, 0);
+                    ::send(client_sockfd, out_buffer, out_message_len, 0);
                 }
 
                 try {
+                    ILOG("Sending messages");
                     while((out_message_len = process_output_message(buffer_size, out_buffer))) {
-                        send(client_sockfd, out_buffer, out_message_len, 0);
+                        ::send(client_sockfd, out_buffer, out_message_len, 0);
                     }
+                    ILOG("Done");
                 } catch (std::system_error& error) {
                     ELOG("Communication error (" << error.code() << "): " << error.what());
                 }
@@ -481,7 +492,7 @@ public:
             auto time_difference = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
             auto time_to_sleep = loop_duration - time_difference;
             if(time_to_sleep.count() > 0) {
-                std::this_thread::sleep_for(time_to_sleep);
+                //std::this_thread::sleep_for(time_to_sleep);
             } else {
                 ELOG("Main procedures take too long!!!");
             }
