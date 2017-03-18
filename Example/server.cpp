@@ -1,13 +1,13 @@
 #include <iostream>
 #include "../SimpleUDP.h"
 
-bool add(SimpleUDP * server, int buffer_len, char * buffer)
+bool add(SimpleUDP * conn, int buffer_len, char * buffer)
 {
     int a;
     int b;
     message::retrive(buffer_len, buffer, a, b);
     std::cout << "Add: " << a << " + " << b << "\n";
-    server->send(100, a + b);
+    conn->send(100, a + b);
     return true;
 }
 
@@ -26,12 +26,12 @@ int main(int argc, char **argv) {
 	}
 
     try {
-        SimpleUDP server(port);
-        server.set_log_stream(std::cout);
-        server.register_message_handler(100, std::bind(add, &server, std::placeholders::_1, std::placeholders::_2));
+        SimpleUDP conn(port);
+        conn.set_log_stream(std::cout);
+        conn.register_message_handler(100, std::bind(add, &conn, std::placeholders::_1, std::placeholders::_2));
 
-        server.listen();
-        server.run();
+        conn.listen();
+        conn.run();
     } catch(const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
     }

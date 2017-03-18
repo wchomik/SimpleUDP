@@ -14,6 +14,8 @@
         "new": "cpp",
         "type_traits": "cpp",
         "typeinfo": "cpp",
-        "functional": "cpp"
+        "functional": "cpp",
+        "array": "cpp",
+        "utility": "cpp"
     }
 }

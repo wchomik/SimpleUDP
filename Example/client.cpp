@@ -1,14 +1,14 @@
 #include <iostream>
 #include "../SimpleUDP.h"
 
-void work(SimpleUDP * client, bool conected){
+void work(SimpleUDP * conn, bool conected){
 	int a;
 	int b;
 
 	std::cout << "Enter two numbers:\n";
 	if(std::cin >> a >> b) {
 		std::cout << "Add sending: " << a << " + " << b << "\n";
-		client->send(100, a, b);
+		conn->send(100, a, b);
 	}
 }
 
@@ -36,13 +36,13 @@ int main(int argc, char **argv) {
 	}
 
 	try {
-		SimpleUDP client(port);
-		client.set_log_stream(std::cout);
-		client.set_work(std::bind(work, &client, std::placeholders::_1));
-		client.register_message_handler(100, print_result);
+		SimpleUDP conn(port);
+		conn.set_log_stream(std::cout);
+		conn.set_work(std::bind(work, &conn, std::placeholders::_1));
+		conn.register_message_handler(100, print_result);
 		
-		client.connect(argv[1], port);
-		client.run(false);
+		conn.connect(argv[1], port);
+		conn.run(false);
 	} catch(const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
     }

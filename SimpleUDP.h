@@ -121,13 +121,13 @@ private:
     int  port      = 0;
     bool is_wifi   = false;
 
-    int server_sockfd;
-    int client_sockfd;
+    int this_sockfd;
+    int other_sockfd;
 
     socklen_t size;
 
-    struct sockaddr_in server_address;
-    struct sockaddr_in client_address;
+    struct sockaddr_in this_address;
+    struct sockaddr_in other_address;
 
     struct iwreq iwr;
     struct ifreq ifr;
@@ -151,7 +151,7 @@ private:
 
     void check_wifi_quality(bool log, int &level, int &noise, int &qual)
     {
-        if( ioctl( server_sockfd, SIOCGIFFLAGS, &ifr ) != -1 )
+        if( ioctl( this_sockfd, SIOCGIFFLAGS, &ifr ) != -1 )
         {
             if((ifr.ifr_flags & ( IFF_UP | IFF_RUNNING )) == ( IFF_UP | IFF_RUNNING )) {
                 is_wifi = true;
@@ -159,7 +159,7 @@ private:
                     ILOG("WiFi is up and running.");
                 }
 
-                if(ioctl(server_sockfd, SIOCGIWSTATS, &iwr) != -1) {
+                if(ioctl(this_sockfd, SIOCGIWSTATS, &iwr) != -1) {
                     if(log) {
                         ILOG("WiFi quality:" << std::endl
                             << "level:   " << (int)(((iw_statistics *)iwr.u.data.pointer)->qual.level) << std::endl
@@ -195,7 +195,7 @@ private:
     void stop()
     {
         ILOG ("Closing socket");
-        close(server_sockfd);
+        close(this_sockfd);
     }
 
     int process_output_message(int buffer_len, char * buffer)
@@ -318,17 +318,17 @@ public:
 
         size = sizeof (struct sockaddr);
 
-        server_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
-        client_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+        this_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+        other_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
 
-        memset (&server_address, 0, sizeof (server_address));
-        memset (&client_address, 0, sizeof (client_address));
-        client_address.sin_family = PF_INET;
-        server_address.sin_family = PF_INET;
-        server_address.sin_port   = htons (port);
-        server_address.sin_addr.s_addr = htonl (INADDR_ANY);
+        memset (&this_address, 0, sizeof (this_address));
+        memset (&other_address, 0, sizeof (other_address));
+        other_address.sin_family = PF_INET;
+        this_address.sin_family = PF_INET;
+        this_address.sin_port   = htons (port);
+        this_address.sin_addr.s_addr = htonl (INADDR_ANY);
 
-        if (bind (server_sockfd, (struct sockaddr *) &server_address, sizeof (struct sockaddr_in))) {
+        if (bind (this_sockfd, (struct sockaddr *) &this_address, sizeof (struct sockaddr_in))) {
             ERNOLOG ("Bind");
             throw std::system_error(errno, std::system_category());
         }
@@ -345,28 +345,33 @@ public:
 
         size = sizeof (struct sockaddr);
 
-        server_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
-        client_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+        this_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
+        other_sockfd = socket (PF_INET, SOCK_DGRAM, 0);
 
-        memset (&server_address, 0, sizeof (server_address));
-        memset (&client_address, 0, sizeof (client_address));
-        client_address.sin_family = PF_INET;
-        client_address.sin_port   = htons (port);
-        client_address.sin_addr.s_addr = inet_addr(address.c_str());
-        server_address.sin_family = PF_INET;
+        memset (&this_address, 0, sizeof (this_address));
+        memset (&other_address, 0, sizeof (other_address));
+        other_address.sin_family = PF_INET;
+        other_address.sin_port   = htons (port);
+        other_address.sin_addr.s_addr = inet_addr(address.c_str());
+        this_address.sin_family = PF_INET;
+
+        if (bind (this_sockfd, (struct sockaddr *) &this_address, sizeof (struct sockaddr_in))) {
+            ERNOLOG ("Bind");
+            throw std::system_error(errno, std::system_category());
+        }
 
         ILOG("Connecting to server");
         //int out_buffer_len = message((unsigned char)MSG_IN_HELLO, instance_name.c_str()).get(buffer_size, out_buffer);
         out_buffer[0] = (unsigned char)MSG_IN_HELLO;
         memcpy(out_buffer + 1, instance_name.c_str(), instance_name.length());
         int out_buffer_len = instance_name.length() + 1;
-        sendto(server_sockfd, out_buffer, out_buffer_len, 0, (struct sockaddr *) &client_address, sizeof (struct sockaddr));
+        sendto(other_sockfd, out_buffer, out_buffer_len, 0, (struct sockaddr *) &other_address, sizeof (struct sockaddr));
 
         ILOG("Waiting for response");
-        recvfrom(server_sockfd, in_buffer, buffer_size, 0, (struct sockaddr *) &server_address, &size);
+        recvfrom(other_sockfd, in_buffer, buffer_size, 0, (struct sockaddr *) &other_address, &size);
 
         ILOG("Server responded");
-        ::connect(server_sockfd, (struct sockaddr *) &server_address, size);
+        ::connect(other_sockfd, (struct sockaddr *) &other_address, size);
         
         connected = true;
 
@@ -420,7 +425,9 @@ public:
                 int in_message_len = -1;
 
                 ILOG("Receiving messages");
-                while((in_message_len = recv(client_sockfd, in_buffer, buffer_size, wait_flag)) != -1) {      
+                int tmp_flag = wait_flag;
+                while((in_message_len = recv(other_sockfd, in_buffer, buffer_size, tmp_flag)) != -1) {
+                    tmp_flag = MSG_DONTWAIT;
                     unsigned char message_id = process_input_message(in_message_len, in_buffer);
                     memset(in_buffer, 0, buffer_size);
                     //last_in_message = 0;
@@ -452,13 +459,13 @@ public:
 
                     check_wifi_quality(false, level, noise, qual);
                     out_message_len = message((unsigned char)MSG_OUT_SEND_WIFI_QUALITY, level, noise, qual).get(buffer_size, out_buffer);
-                    ::send(client_sockfd, out_buffer, out_message_len, 0);
+                    ::send(other_sockfd, out_buffer, out_message_len, 0);
                 }
 
                 try {
                     ILOG("Sending messages");
                     while((out_message_len = process_output_message(buffer_size, out_buffer))) {
-                        ::send(client_sockfd, out_buffer, out_message_len, 0);
+                        ::send(other_sockfd, out_buffer, out_message_len, 0);
                     }
                     ILOG("Done");
                 } catch (std::system_error& error) {
@@ -469,17 +476,17 @@ public:
                 if(!frequency){
                     ILOG("Waiting for incoming connections.\n");
                 }
-                size = sizeof(client_address);
+                size = sizeof(other_address);
 
-                ssize_t num_bytes = recvfrom (server_sockfd, in_buffer, buffer_size, wait_flag, (struct sockaddr *) &client_address, &size);
+                ssize_t num_bytes = recvfrom (this_sockfd, in_buffer, buffer_size, wait_flag, (struct sockaddr *) &other_address, &size);
 
                 if (0 < num_bytes && process_input_message(num_bytes, in_buffer)) {
-                    if(::connect (client_sockfd, (struct sockaddr *) &client_address, size)) {
+                    if(::connect (other_sockfd, (struct sockaddr *) &other_address, size)) {
                         ERNOLOG("Cannot connect");
                     }
-                    ILOG("Connected to "<< inet_ntoa(client_address.sin_addr) << ":" << ntohs (client_address.sin_port));
+                    ILOG("Connected to "<< inet_ntoa(other_address.sin_addr) << ":" << ntohs (other_address.sin_port));
                     memcpy(in_buffer, "Hello", strlen("Hello") + 1);
-                    if (write (client_sockfd, in_buffer, strlen("Hello") + 1) < 0) ERNOLOG ("Cannot write to socket");
+                    if (write (other_sockfd, in_buffer, strlen("Hello") + 1) < 0) ERNOLOG ("Cannot write to socket");
                     connected       = true;
                     //last_in_message = 0;
                 } else if(num_bytes == -1) {
